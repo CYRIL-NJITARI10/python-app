@@ -1,6 +1,5 @@
 from flask import Flask
 
-...
 def hello_world():
  prefix_google = """
  <!-- Google tag (gtag.js) -->
@@ -21,3 +20,6 @@ app = Flask(__name__)
 def root():
     return "Hello from Space! 🚀"
 
+if __name__ == "__main__":
+    # Changement du port d'écoute
+    app.run(host='0.0.0.0', port=8080)
