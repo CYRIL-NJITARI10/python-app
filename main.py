@@ -1,28 +1,54 @@
-from flask import Flask, request, redirect, url_for, jsonify
+from flask import Flask, request, url_for, jsonify
 import logging
 import requests
 import json
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import Flow
-from googleapiclient.discovery import build
 from datetime import date, timedelta
 from flask import session
 
 app = Flask(__name__)
 
-app.secret_key = 'some_random_secret_key'  # Change this to a proper secret key for your application
-
-# Load client secrets from your .json file
-with open('credentials_2.json', 'r') as f:
-    client_config = json.load(f)
-
-SCOPES = ['https://www.googleapis.com/auth/analytics.readonly']
-REDIRECT_URI = 'https://localhost:8080/visitors'
-flow = Flow.from_client_config(
-    client_config=client_config,
-    scopes=SCOPES,
-    redirect_uri=REDIRECT_URI
-)
+# CSS pour styliser la page
+# CSS pour styliser la page
+css_style = '''
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: #fff;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0px 0px 10px 0px #000;
+            max-width: 600px;
+        }
+        h1 {
+            color: #333;
+        }
+        .button-container {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .button {
+            background-color: #007bff;
+            color: #fff;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            text-transform: uppercase;
+            cursor: pointer;
+        }
+        .button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+'''
 
 @app.route("/")
 def hello_world():
@@ -36,18 +62,29 @@ def hello_world():
     gtag('config', 'G-RW8X8N6FVS');
     </script>
     """
-    message = "Hello World 🚀"
+    message = "<h1>Hello World 🚀</h1>"
+    button_textbox = '''
+    <form action="/textbox" method="get">
+        <input type="submit" class="button" value="Textbox">
+    </form>
+    '''
     button_google = '''
     <form action="/make_google_request" method="get">
-        <input type="submit" value="Fetch Google Cookies">
+        <input type="submit" class="button" value="Fetch Google Cookies">
+    </form>
+    '''
+    button_google_analytics = '''
+    <form action="/make_ganalytics_request" method="get">
+        <input type="submit" class="button" value="Fetch Google Analytics Cookies">
     </form>
     '''
     button_visitors = '''
-    <form action="/index" method="get">
-        <input type="submit" value="Get Number of Visitors">
+    <form action="/get_number_of_visitors" method="get">
+        <input type="submit" class="button" value="Get Number of Visitors">
     </form>
     '''
-    return prefix_google + message + "<br>" + button_google + button_visitors
+    return prefix_google + css_style + '<div class="container">' + message + button_textbox + button_google + button_google_analytics + button_visitors + '</div>'
+
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -85,63 +122,43 @@ def make_ganalytics_request():
     response_text = req.text
     return jsonify(status_code=status_code, text=response_text)
 
-""""
-@app.route('/root')
-def root():
-    return "Hello from Space! 🚀"
-"""
+from google.analytics.data_v1beta import BetaAnalyticsDataClient
+from google.analytics.data_v1beta.types import (
+    DateRange,
+    Dimension,
+    Metric,
+    RunReportRequest,
+)
+import os
 
-@app.route('/index')
-def index():
-    authorization_url, state = flow.authorization_url(prompt='consent', include_granted_scopes='true')
-    # Store state in session for further use
-    session['state'] = state
-    return redirect(authorization_url)
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = 'CyrildataSr-cf726b873030.json'
 
-
-@app.route('/visitors')
-def callback():
-    flow.fetch_token(authorization_response=request.url)
-    credentials = flow.credentials
-    session['credentials'] = {
-        'token': credentials.token,
-        'refresh_token': credentials.refresh_token,
-        'token_uri': credentials.token_uri,
-        'client_id': credentials.client_id,
-        'client_secret': credentials.client_secret,
-        'scopes': credentials.scopes
-    }
-    return redirect(url_for('get_ga_data'))
-
-
-@app.route('/get_ga_data')
-def get_ga_data():
-    # Get the credentials from the session
-    creds = session.get('credentials')
-    credentials = Credentials(
-        token=creds['token'],
-        refresh_token=creds['refresh_token'],
-        token_uri=creds['token_uri'],
-        client_id=creds['client_id'],
-        client_secret=creds['client_secret'],
-        scopes=creds['scopes']
+def get_number_of_visitors(property_id):
+    client = BetaAnalyticsDataClient()
+    
+    request = RunReportRequest(
+        property=f"properties/{property_id}",
+        dimensions=[Dimension(name="date")],
+        metrics=[Metric(name="activeUsers")],
+        date_ranges=[DateRange(start_date="7daysAgo", end_date="today")],
     )
 
-    service = build('analytics', 'v3', credentials=credentials)
-    today = date.today().strftime('%Y-%m-%d')
-    start_date = (date.today() - timedelta(days=30)).strftime('%Y-%m-%d')
+    response = client.run_report(request)
 
-    property_id = 'properties/408224738'
-    response = service.data().ga().get(
-        ids='ga:' + property_id.split('/')[-1],  # The "ga:" prefix is typically required
-        start_date=start_date,
-        end_date=today,
-        metrics='ga:activeUsers'
-    ).execute()
+    # Parse the response to get the number of visitors
+    number_of_visitors = None
+    for row in response.rows:
+        number_of_visitors = row.metric_values[0].value
+        break  # Assuming you only need the first row
 
-    visitors_count = response.get('totals', [{}])[0].get('values', [0])[0]
+    return number_of_visitors
 
-    return f"Number of visitors for the last 30 days: {visitors_count}"
+@app.route('/get_number_of_visitors')
+def get_number_of_visitors_route():
+    # Replace 'YOUR-GA4-PROPERTY-ID' with your Google Analytics 4 property ID
+    property_id = "408224738"  # Replace with your property ID
+    visitors = get_number_of_visitors(property_id)
+    return f"Number of visitors: {visitors}"
 
 if __name__ == "__main__":
     app.run(debug=True, host='0.0.0.0', port=8080, ssl_context=('cert.pem', 'key.pem'))

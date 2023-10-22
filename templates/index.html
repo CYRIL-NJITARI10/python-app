@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Timer Log App</title>
+</head>
+<body>
+    <button onclick="fetch('/run_experiment').then(response => response.json()).then(data => {
+        let imgTag = document.getElementById('image');
+        imgTag.src = 'data:image/png;base64,' + data.image_b64;
+    })">Run 100 Experiments and Show Histogram</button>
+
+    <h3>Questions:</h3>
+    <button onclick="fetchQuestion(4)">Question 4</button>
+    <!-- Vous pouvez ajouter d'autres boutons pour les autres questions -->
+
+    <img id="image" alt="Histogram" width="600" />
+
+    <div id="results"></div>
+
+    <script>
+        function fetchQuestion(q_number) {
+            fetch('/question/' + q_number).then(response => response.json()).then(data => {
+                let resultsDiv = document.getElementById('results');
+                resultsDiv.innerHTML = 'Time taken with dictionary: ' + data.time_taken_dict + ' seconds<br>' +
+                    'Time taken with Counter: ' + data.time_taken_counter + ' seconds<br>' +
+                    'Sample counts with dictionary: ' + JSON.stringify(data.sample_dict) + '<br>' +
+                    'Sample counts with Counter: ' + JSON.stringify(data.sample_counter);
+            });
+        }
+    </script>
+</body>
+</html>
